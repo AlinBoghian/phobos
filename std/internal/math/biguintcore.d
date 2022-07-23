@@ -502,7 +502,7 @@ public:
 
     // return false if invalid character found
     bool fromHexString(Range)(Range s) scope if (
-        isBidirectionalRange!Range && isSomeChar!(ElementType!Range))
+        isForwardRange!Range && isSomeChar!(ElementType!Range))
     {
         import std.range : walkLength;
 
@@ -520,51 +520,90 @@ public:
         auto tmp = new BigDigit[len + 1];
         uint part, sofar, partcount;
 
-        foreach_reverse (character; s)
+        static if(isBidirectionalRange!Range)
         {
-            if (character == '_')
-                continue;
+            foreach_reverse (character; s)
+            {
+                if (character == '_')
+                    continue;
 
-            uint x;
-            if (character >= '0' && character <= '9')
-            {
-                x = character - '0';
-            }
-            else if (character >= 'A' && character <= 'F')
-            {
-                x = character - 'A' + 10;
-            }
-            else if (character >= 'a' && character <= 'f')
-            {
-                x = character - 'a' + 10;
-            }
-            else
-            {
-                return false;
-            }
+                uint x;
+                if (character >= '0' && character <= '9')
+                {
+                    x = character - '0';
+                }
+                else if (character >= 'A' && character <= 'F')
+                {
+                    x = character - 'A' + 10;
+                }
+                else if (character >= 'a' && character <= 'f')
+                {
+                    x = character - 'a' + 10;
+                }
+                else
+                {
+                    return false;
+                }
 
-            part >>= 4;
-            part |= (x << (32 - 4));
-            ++partcount;
+                part >>= 4;
+                part |= (x << (32 - 4));
+                ++partcount;
 
-            if (partcount == 8)
+                if (partcount == 8)
+                {
+                    tmp[sofar] = part;
+                    ++sofar;
+                    partcount = 0;
+                    part = 0;
+                }
+            }
+            if (part)
             {
+                for ( ; partcount != 8; ++partcount) part >>= 4;
                 tmp[sofar] = part;
                 ++sofar;
-                partcount = 0;
-                part = 0;
             }
-        }
-        if (part)
+            if (sofar == 0)
+                data = ZERO;
+            else
+                data = trustedAssumeUnique(tmp[0 .. sofar]);
+        } 
+        else 
         {
-            for ( ; partcount != 8; ++partcount) part >>= 4;
-            tmp[sofar] = part;
-            ++sofar;
-        }
-        if (sofar == 0)
-            data = ZERO;
-        else
-            data = trustedAssumeUnique(tmp[0 .. sofar]);
+            auto digitCount = s.save.walkLength;
+            auto wordNum = digitCount / 8 + (digitCount % 8 == 0) ? 0 : 1;
+            partcount = 7, sofar = wordNum;
+            foreach (character; s)
+            {
+                if (character == '_')
+                    continue;
+
+                uint x;
+                if (character >= '0' && character <= '9')
+                {
+                    x = character - '0';
+                }
+                else if (character >= 'A' && character <= 'F')
+                {
+                    x = character - 'A' + 10;
+                }
+                else if (character >= 'a' && character <= 'f')
+                {
+                    x = character - 'a' + 10;
+                }
+                else
+                {
+                    return false;
+                }
+                tmp[sofar] |= x << (partcount << 2);
+                partcount--;
+                if (partcount == 0)
+                {
+                    sofar--;
+                    partcount = 7;
+                }
+            }
+        } 
 
         return true;
     }

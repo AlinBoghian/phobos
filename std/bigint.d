@@ -64,12 +64,12 @@ public:
      *     $(REF ConvException, std,conv) if the string doesn't represent a valid number
      */
     this(Range)(Range s) if (
-        isBidirectionalRange!Range &&
+        isForwardRange!Range &&
         isSomeChar!(ElementType!Range) &&
         !isInfinite!Range &&
         !isNarrowString!Range)
     {
-        import std.algorithm.iteration : filterBidirectional;
+        import std.algorithm.iteration : filterBidirectional, filter;
         import std.algorithm.searching : startsWith;
         import std.conv : ConvException;
         import std.exception : enforce;
@@ -92,21 +92,30 @@ public:
             neg = true;
             s.popFront();
         }
-
         if (s.save.startsWith("0x".byChar) ||
             s.save.startsWith("0X".byChar))
         {
             s.popFront;
             s.popFront;
-
+            
             if (!s.empty)
-                ok = data.fromHexString(s.filterBidirectional!(a => a != '_'));
+            {
+                static if(isBidirectionalRange!Range)
+                {
+                    auto filtered = s.filterBidirectional!(a => a != '_');
+                }
+                else
+                {
+                    auto filtered = s.filter!(a => a != '_');
+                }
+                ok = data.fromHexString(filtered);
+            }
             else
                 ok = false;
         }
         else
         {
-            ok = data.fromDecimalString(s.filterBidirectional!(a => a != '_'));
+            ok = data.fromDecimalString(s.filter!(a => a != '_'));
         }
 
         enforce!ConvException(ok, "Not a valid numerical string");
